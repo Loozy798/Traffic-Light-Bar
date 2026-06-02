@@ -1,0 +1,61 @@
+{
+  "color-space-for-untagged-svg-colors" : "display-p3",
+  "fill" : "system-dark",
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "image-name" : "green.png",
+          "name" : "green",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              -280.546875,
+              0
+            ]
+          }
+        },
+        {
+          "image-name" : "red.png",
+          "name" : "red",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              288.09375,
+              0.5
+            ]
+          }
+        },
+        {
+          "image-name" : "yellow.png",
+          "name" : "yellow",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0.5
+            ]
+          }
+        },
+        {
+          "image-name" : "back.png",
+          "name" : "back"
+        }
+      ],
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}
