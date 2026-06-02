@@ -2,33 +2,22 @@ import SwiftUI
 import AppKit
 
 struct TrafficLightIconView: View {
-    enum LoadLevel {
-        case low    // 绿灯 <30%
-        case medium // 黄灯 30~70%
-        case high   // 红灯 >70%
-    }
+    /// 综合压力值 0.0（空闲绿色）→ 1.0（高负载红色）
+    let loadRatio: Double
 
-    let loadLevel: LoadLevel
-
-    private var dotColor: Color {
-        switch loadLevel {
-        case .low:    return Color(red: 0.18, green: 0.80, blue: 0.44)
-        case .medium: return Color(red: 0.95, green: 0.76, blue: 0.06)
-        case .high:   return Color(red: 0.91, green: 0.30, blue: 0.24)
-        }
+    /// HSL 连续渐变：绿(hue 0.35) → 黄 → 红(hue 0)
+    var dotColor: Color {
+        let r = min(max(loadRatio, 0), 1.0)
+        return Color(hue: (1.0 - r) * 0.35, saturation: 0.88, brightness: 0.88)
     }
 
     var body: some View {
         ZStack {
-            // 最外层：大范围柔和扩散光晕（由色到透明）
+            // 外发光：由亮到暗向外扩散
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [
-                            dotColor.opacity(0.35),
-                            dotColor.opacity(0.12),
-                            .clear
-                        ],
+                        colors: [dotColor.opacity(0.5), dotColor.opacity(0.15), .clear],
                         center: .center,
                         startRadius: 2,
                         endRadius: 9
@@ -36,14 +25,11 @@ struct TrafficLightIconView: View {
                 )
                 .frame(width: 18, height: 18)
 
-            // 中层：主灯体，带内部高光（模拟 LED 玻璃感）
+            // 主灯：白色高光 + 渐变色，模拟 LED 玻璃质感
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [
-                            Color.white.opacity(0.75),
-                            dotColor
-                        ],
+                        colors: [Color.white.opacity(0.75), dotColor],
                         center: UnitPoint(x: 0.35, y: 0.3),
                         startRadius: 0,
                         endRadius: 5
@@ -56,5 +42,11 @@ struct TrafficLightIconView: View {
             \.colorScheme,
             NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .dark : .light
         )
+    }
+
+    /// 共用颜色计算（供其他 View 调用）
+    static func color(for ratio: Double) -> Color {
+        let r = min(max(ratio, 0), 1.0)
+        return Color(hue: (1.0 - r) * 0.35, saturation: 0.88, brightness: 0.85)
     }
 }
