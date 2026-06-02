@@ -1,145 +1,296 @@
-//
-//  ContentView.swift
-//  Traffic Light Bar
-//
-
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     @ObservedObject var monitor: SystemMonitor
 
+    // 格式化字节单位
+    private func formatBytes(_ bytes: UInt64) -> String {
+        let gb = Double(bytes) / 1_073_741_824
+        let mb = Double(bytes) / 1_048_576
+        if gb >= 1 { return String(format: "%.1f GB", gb) }
+        if mb >= 1 { return String(format: "%.0f MB", mb) }
+        return "\(bytes) B"
+    }
+
+    // 格式化网速
+    private func formatSpeed(_ bps: Double) -> String {
+        let mbps = bps / 1_048_576
+        let kbps = bps / 1024
+        if mbps >= 1 { return String(format: "%.1f MB/s", mbps) }
+        return String(format: "%.0f KB/s", kbps)
+    }
+
+    // 综合负载
+    private var combinedLoad: Double {
+        let cpu = monitor.stats.cpuUsage
+        let mem = monitor.stats.memoryTotal > 0
+            ? (Double(monitor.stats.memoryUsed) / Double(monitor.stats.memoryTotal)) * 100 : 0
+        let disk = monitor.stats.diskTotal > 0
+            ? (Double(monitor.stats.diskUsed) / Double(monitor.stats.diskTotal)) * 100 : 0
+        return cpu * 0.4 + mem * 0.35 + disk * 0.25
+    }
+
+    private var loadColor: Color {
+        switch combinedLoad {
+        case ..<30:   return Color(red: 0.18, green: 0.80, blue: 0.44)
+        case 30..<70: return Color(red: 0.95, green: 0.76, blue: 0.06)
+        default:      return Color(red: 0.91, green: 0.30, blue: 0.24)
+        }
+    }
+
+    private var loadLabel: String {
+        switch combinedLoad {
+        case ..<30:   return "空闲"
+        case 30..<70: return "中等"
+        default:      return "高负载"
+        }
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("TrafficMonitor")
-                .font(.headline)
-                .padding(.top, 8)
-
-            Group {
-                // CPU
-                RowView(title: "CPU", value: monitor.stats.cpuUsage, format: "%.1f%%", color: colorFor(monitor.stats.cpuUsage, low: 30, high: 70))
-                if let temp = monitor.stats.cpuTemperature {
-                    Text("Temperature: \(temp, specifier: "%.0f") °C")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+        VStack(spacing: 0) {
+            // ── 顶部综合负载指示 ──
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    // 三色灯预览
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(combinedLoad < 30
+                                  ? Color(red: 0.18, green: 0.80, blue: 0.44)
+                                  : Color.gray.opacity(0.25))
+                            .frame(width: 10, height: 10)
+                        Circle()
+                            .fill(combinedLoad >= 30 && combinedLoad < 70
+                                  ? Color(red: 0.95, green: 0.76, blue: 0.06)
+                                  : Color.gray.opacity(0.25))
+                            .frame(width: 10, height: 10)
+                        Circle()
+                            .fill(combinedLoad >= 70
+                                  ? Color(red: 0.91, green: 0.30, blue: 0.24)
+                                  : Color.gray.opacity(0.25))
+                            .frame(width: 10, height: 10)
+                    }
+                    Text("Traffic Light Bar")
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    Text(loadLabel)
+                        .font(.system(size: 11, weight: .medium))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(loadColor.opacity(0.18))
+                        .foregroundColor(loadColor)
+                        .clipShape(Capsule())
                 }
 
-                // Memory
-                let memPercent = monitor.stats.memoryTotal > 0
-                    ? Double(monitor.stats.memoryUsed) / Double(monitor.stats.memoryTotal) * 100
-                    : 0
-                RowView(title: "Memory",
-                        value: memPercent,
-                        format: "%.1f%%",
-                        color: colorFor(memPercent, low: 60, high: 85),
-                        detail: "\(formatBytes(monitor.stats.memoryUsed)) / \(formatBytes(monitor.stats.memoryTotal))")
-
-                // Disk
-                let diskPercent = monitor.stats.diskTotal > 0
-                    ? Double(monitor.stats.diskUsed) / Double(monitor.stats.diskTotal) * 100
-                    : 0
-                RowView(title: "Disk",
-                        value: diskPercent,
-                        format: "%.1f%%",
-                        color: colorFor(diskPercent, low: 70, high: 90),
-                        detail: "\(formatBytes(monitor.stats.diskUsed)) / \(formatBytes(monitor.stats.diskTotal))")
-
-                // Network
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Network")
-                        .font(.subheadline)
-                    HStack {
-                        Text("↓ \(formatSpeed(monitor.stats.networkDownload))")
-                        Spacer()
-                        Text("↑ \(formatSpeed(monitor.stats.networkUpload))")
+                // 综合负载进度条
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.primary.opacity(0.08))
+                            .frame(height: 6)
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(loadColor)
+                            .frame(width: geo.size.width * min(combinedLoad / 100, 1), height: 6)
+                            .animation(.easeOut(duration: 0.4), value: combinedLoad)
                     }
-                    .font(.system(.caption, design: .monospaced))
-                    Text("IP: \(monitor.stats.localIP)")
-                        .font(.caption2)
+                }
+                .frame(height: 6)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+
+            Divider().opacity(0.5)
+
+            // ── 详细指标 ──
+            VStack(spacing: 0) {
+                metricRow(
+                    icon: "cpu",
+                    label: "CPU",
+                    value: String(format: "%.1f%%", monitor.stats.cpuUsage),
+                    ratio: monitor.stats.cpuUsage / 100,
+                    color: colorFor(monitor.stats.cpuUsage)
+                )
+                Divider().opacity(0.3).padding(.leading, 36)
+
+                let memRatio = monitor.stats.memoryTotal > 0
+                    ? Double(monitor.stats.memoryUsed) / Double(monitor.stats.memoryTotal) : 0
+                metricRow(
+                    icon: "memorychip",
+                    label: "内存",
+                    value: "\(formatBytes(monitor.stats.memoryUsed)) / \(formatBytes(monitor.stats.memoryTotal))",
+                    ratio: memRatio,
+                    color: colorFor(memRatio * 100)
+                )
+                Divider().opacity(0.3).padding(.leading, 36)
+
+                let diskRatio = monitor.stats.diskTotal > 0
+                    ? Double(monitor.stats.diskUsed) / Double(monitor.stats.diskTotal) : 0
+                metricRow(
+                    icon: "internaldrive",
+                    label: "磁盘",
+                    value: "\(formatBytes(monitor.stats.diskUsed)) / \(formatBytes(monitor.stats.diskTotal))",
+                    ratio: diskRatio,
+                    color: colorFor(diskRatio * 100)
+                )
+                Divider().opacity(0.3).padding(.leading, 36)
+
+                networkRow()
+            }
+
+            // ── 电池（仅 MacBook）──
+            if monitor.stats.batteryPresent {
+                Divider().opacity(0.5)
+                batterySection()
+            }
+
+            Divider().opacity(0.5)
+
+            // ── 底部操作栏 ──
+            HStack(spacing: 0) {
+                actionButton(icon: "network", label: monitor.stats.localIP)
+                Spacer()
+                actionButton(icon: "arrow.clockwise.circle", label: "活动监视器") {
+                    NSWorkspace.shared.launchApplication("Activity Monitor")
+                }
+                Spacer()
+                actionButton(icon: "power", label: "退出") {
+                    NSApp.terminate(nil)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+        }
+        .frame(width: 300)
+        .background(.ultraThinMaterial)
+    }
+
+    // MARK: - 子视图
+
+    @ViewBuilder
+    private func metricRow(icon: String, label: String, value: String, ratio: Double, color: Color) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13))
+                .foregroundColor(color)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(label)
+                        .font(.system(size: 12, weight: .medium))
+                    Spacer()
+                    Text(value)
+                        .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
-
-                // Battery
-                if monitor.stats.batteryPresent {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Battery")
-                            .font(.subheadline)
-                        if let level = monitor.stats.batteryLevel {
-                            HStack {
-                                Text("\(level, specifier: "%.0f")%")
-                                    .bold()
-                                if let charging = monitor.stats.batteryCharging {
-                                    Image(systemName: charging ? "bolt.fill" : "bolt.slash")
-                                        .foregroundColor(charging ? .green : .secondary)
-                                }
-                            }
-                            if let remaining = monitor.stats.batteryTimeRemaining {
-                                Text("Remaining: \(remaining)")
-                                    .font(.caption2)
-                            }
-                        } else {
-                            Text("Calculating…")
-                        }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color.primary.opacity(0.07))
+                            .frame(height: 4)
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(color.opacity(0.8))
+                            .frame(width: geo.size.width * min(ratio, 1), height: 4)
+                            .animation(.easeOut(duration: 0.5), value: ratio)
                     }
-                } else {
-                    Text("Power: AC Adapter")
-                        .font(.caption)
+                }
+                .frame(height: 4)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private func networkRow() -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.up.arrow.down")
+                .font(.system(size: 13))
+                .foregroundColor(.blue)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("网络")
+                    .font(.system(size: 12, weight: .medium))
+                HStack(spacing: 12) {
+                    Label(formatSpeed(monitor.stats.networkDownload), systemImage: "arrow.down")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    Label(formatSpeed(monitor.stats.networkUpload), systemImage: "arrow.up")
+                        .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
             }
-            .padding(.horizontal, 8)
-
-            Spacer(minLength: 0)
+            Spacer()
         }
-        .frame(width: 260)
-        .padding(.bottom, 12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 
-    private func colorFor(_ percent: Double, low: Double, high: Double) -> Color {
-        if percent > high { return .red }
-        if percent > low { return .yellow }
-        return .green
+    @ViewBuilder
+    private func batterySection() -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: monitor.stats.batteryCharging == true
+                  ? "bolt.fill" : "battery.75")
+                .font(.system(size: 13))
+                .foregroundColor(.green)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("电池")
+                        .font(.system(size: 12, weight: .medium))
+                    Spacer()
+                    Text(String(format: "%.0f%%", monitor.stats.batteryLevel ?? 0))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    if monitor.stats.batteryCharging == true {
+                        Text("充电中")
+                            .font(.system(size: 10))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(Color.green.opacity(0.15))
+                            .foregroundColor(.green)
+                            .clipShape(Capsule())
+                    }
+                }
+                if let remaining = monitor.stats.batteryTimeRemaining {
+                    Text("剩余 \(remaining)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
     }
 
-    private func formatBytes(_ bytes: UInt64) -> String {
-        let form = ByteCountFormatter()
-        form.countStyle = .file
-        return form.string(fromByteCount: Int64(bytes))
+    @ViewBuilder
+    private func actionButton(icon: String, label: String, action: (() -> Void)? = nil) -> some View {
+        Button {
+            action?()
+        } label: {
+            VStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 13))
+                Text(label)
+                    .font(.system(size: 9))
+                    .lineLimit(1)
+            }
+            .foregroundColor(.secondary)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+        }
+        .buttonStyle(.plain)
     }
 
-    private func formatSpeed(_ bytesPerSec: Double) -> String {
-        if bytesPerSec >= 1_000_000 {
-            return String(format: "%.1f MB/s", bytesPerSec / 1_000_000)
-        } else if bytesPerSec >= 1_000 {
-            return String(format: "%.0f KB/s", bytesPerSec / 1_000)
-        } else {
-            return String(format: "%.0f B/s", bytesPerSec)
+    private func colorFor(_ percent: Double) -> Color {
+        switch percent {
+        case ..<50:   return .green
+        case 50..<80: return Color(red: 0.95, green: 0.76, blue: 0.06)
+        default:      return Color(red: 0.91, green: 0.30, blue: 0.24)
         }
     }
 }
 
-struct RowView: View {
-    let title: String
-    let value: Double
-    let format: String
-    let color: Color
-    var detail: String? = nil
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(title)
-                    .font(.subheadline)
-                Spacer()
-                Text(String(format: format, value))
-                    .bold()
-            }
-            ProgressView(value: value, total: 100)
-                .tint(color)
-            if let detail {
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-        }
-    }
+#Preview {
+    ContentView(monitor: SystemMonitor())
+        .frame(width: 300)
 }

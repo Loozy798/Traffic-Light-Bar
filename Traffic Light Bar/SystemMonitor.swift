@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 import IOKit
 import IOKit.ps
 
@@ -187,7 +188,7 @@ class SystemMonitor: ObservableObject {
         
         let level = ps[kIOPSCurrentCapacityKey] as? Double
         let isCharging = ps[kIOPSPowerSourceStateKey] as? String == kIOPSACPowerValue
-        let timeRemaining = ps[kIOPSTimeRemainingKey] as? Int ?? 0
+        let timeRemaining = ps[kIOPSTimeToEmptyKey] as? Int ?? 0
         
         var remainingStr: String?
         if timeRemaining > 0 {
