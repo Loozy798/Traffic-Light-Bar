@@ -21,49 +21,59 @@ class SystemMonitor: ObservableObject {
         updateTask?.cancel()
     }
     
+    /// 取消并重新启动监控循环（唤醒后调用）
+    func restart() {
+        updateTask?.cancel()
+        // 重置网络差值，避免唤醒后出现离谱的速率峰值
+        lastNetworkDownload   = 0
+        lastNetworkUpload     = 0
+        lastNetworkUpdateTime = 0
+        startMonitoring()
+    }
+
     private func startMonitoring() {
+        updateTask?.cancel()
         updateTask = Task { [weak self] in
             while !Task.isCancelled {
-                await self?.updateAllStats()
-                try? await Task.sleep(nanoseconds: 1 * 1_000_000_000) // 每秒更新一次
+                // ✅ 关键修复：所有采样都在 global 队列执行
+                // 避免 Mach 端口调用在唤醒瞬间阻塞 Swift 协作线程池
+                let newStats = await withCheckedContinuation {
+                    (cont: CheckedContinuation<SystemStats, Never>) in
+                    DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                        cont.resume(returning: self?.collectStats() ?? SystemStats())
+                    }
+                }
+                guard !Task.isCancelled else { break }
+                await MainActor.run { [weak self] in
+                    self?.stats = newStats
+                }
+                try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 秒
             }
         }
     }
-    
-    private func updateAllStats() async {
-        var newStats = SystemStats()
-        
-        // 采集CPU使用率
-        newStats.cpuUsage = getCPUUsage()
-        // 采集CPU温度（需要SMC访问权限，示例默认返回nil）
-        newStats.cpuTemperature = nil
-        
-        // 采集内存
-        let (memTotal, memUsed) = getMemoryInfo()
-        newStats.memoryTotal = memTotal
-        newStats.memoryUsed = memUsed
-        
-        // 采集磁盘
-        let (diskTotal, diskUsed) = getDiskInfo()
-        newStats.diskTotal = diskTotal
-        newStats.diskUsed = diskUsed
-        
-        // 采集网络
+
+    // MARK: - 全部采集（在 global 队列上运行，不阻塞协作池）
+
+    private func collectStats() -> SystemStats {
+        var s = SystemStats()
+        s.cpuUsage        = getCPUUsage()
+        s.cpuTemperature  = nil
+
+        let (memT, memU) = getMemoryInfo()
+        s.memoryTotal = memT; s.memoryUsed = memU
+
+        let (diskT, diskU) = getDiskInfo()
+        s.diskTotal = diskT; s.diskUsed = diskU
+
         let (down, up) = getNetworkUsage()
-        newStats.networkDownload = down
-        newStats.networkUpload = up
-        newStats.localIP = getLocalIP()
-        
-        // 采集电池
-        let (batteryPresent, level, charging, remaining) = getBatteryInfo()
-        newStats.batteryPresent = batteryPresent
-        newStats.batteryLevel = level
-        newStats.batteryCharging = charging
-        newStats.batteryTimeRemaining = remaining
-        
-        await MainActor.run {
-            self.stats = newStats
-        }
+        s.networkDownload = down; s.networkUpload = up
+        s.localIP = getLocalIP()
+
+        let (bp, bl, bc, br) = getBatteryInfo()
+        s.batteryPresent = bp; s.batteryLevel = bl
+        s.batteryCharging = bc; s.batteryTimeRemaining = br
+
+        return s
     }
     
     // MARK: - 各数据采集实现
@@ -140,9 +150,10 @@ class SystemMonitor: ObservableObject {
         
         if lastNetworkUpdateTime > 0 {
             let timeDiff = now - lastNetworkUpdateTime
-            if timeDiff > 0 {
-                downPerSec = Double(totalDownload - lastNetworkDownload) / timeDiff
-                upPerSec = Double(totalUpload - lastNetworkUpload) / timeDiff
+            // 唤醒后 timeDiff 可能很大，跳过第一次差值
+            if timeDiff > 0 && timeDiff < 10 {
+                downPerSec = Double(totalDownload &- lastNetworkDownload) / timeDiff
+                upPerSec = Double(totalUpload &- lastNetworkUpload) / timeDiff
             }
         }
         

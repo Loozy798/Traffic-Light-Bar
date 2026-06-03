@@ -119,9 +119,11 @@ private struct OverviewTab: View {
                     DetailRow(icon: "network", label: "本机 IP",
                               value: monitor.stats.localIP)
                     if monitor.stats.batteryPresent {
-                        DetailRow(icon: "battery.75", label: "电池",
-                                  value: String(format: "%.0f%%", monitor.stats.batteryLevel ?? 0)
-                                    + (monitor.stats.batteryCharging == true ? "  充电中 ⚡" : ""))
+                        BatteryDetailRow(
+                            percent: monitor.stats.batteryLevel ?? 0,
+                            charging: monitor.stats.batteryCharging == true,
+                            timeRemaining: monitor.stats.batteryTimeRemaining
+                        )
                     }
                 }
                 .background(Color.primary.opacity(0.04))
@@ -377,6 +379,50 @@ private struct DetailRow: View {
             Text(value)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(.secondary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+    }
+}
+
+// MARK: - 电池详情行（仪表盘专用）
+
+private struct BatteryDetailRow: View {
+    let percent: Double
+    let charging: Bool
+    let timeRemaining: String?
+
+    private var percentColor: Color {
+        if percent <= 10 { return Color(red: 0.91, green: 0.22, blue: 0.21) }
+        if percent <= 20 { return Color(red: 0.96, green: 0.52, blue: 0.15) }
+        if percent <= 40 { return Color(red: 0.95, green: 0.76, blue: 0.06) }
+        return .secondary
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            BatteryIcon(percent: percent, charging: charging)
+                .frame(width: 26, height: 13)
+                .frame(width: 22)
+            Text("电池")
+                .font(.system(size: 13))
+            Spacer()
+            if charging {
+                Text("充电中")
+                    .font(.system(size: 10))
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(Color.green.opacity(0.15))
+                    .foregroundColor(.green)
+                    .clipShape(Capsule())
+            }
+            if let r = timeRemaining {
+                Text(r)
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            Text(String(format: "%.0f%%", percent))
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundColor(percentColor)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)

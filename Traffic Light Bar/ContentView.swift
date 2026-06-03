@@ -95,7 +95,7 @@ struct ContentView: View {
             // ── 指标列表 ──
             VStack(spacing: 0) {
                 if preferences.showCPU {
-                    metricRow(icon: "cpu", label: "CPU",
+                    metricRow(icon: "cpu", label: "CPU负载",
                               value: String(format: "%.1f%%", monitor.stats.cpuUsage),
                               ratio: monitor.stats.cpuUsage / 100)
                     Divider().opacity(0.3).padding(.leading, 36)
@@ -195,16 +195,21 @@ struct ContentView: View {
 
     @ViewBuilder
     private func batteryRow() -> some View {
+        let pct      = monitor.stats.batteryLevel ?? 0
+        let charging = monitor.stats.batteryCharging == true
+
         HStack(spacing: 10) {
-            Image(systemName: monitor.stats.batteryCharging == true ? "bolt.fill" : "battery.75")
-                .font(.system(size: 13)).foregroundColor(.green).frame(width: 20)
+            // 仿原生 macOS 电池图标
+            BatteryIcon(percent: pct, charging: charging)
+                .frame(width: 24, height: 12)
+
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text("电池").font(.system(size: 12, weight: .medium))
                     Spacer()
-                    Text(String(format: "%.0f%%", monitor.stats.batteryLevel ?? 0))
+                    Text(String(format: "%.0f%%", pct))
                         .font(.system(size: 11, design: .monospaced)).foregroundColor(.secondary)
-                    if monitor.stats.batteryCharging == true {
+                    if charging {
                         Text("充电中").font(.system(size: 10))
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(Color.green.opacity(0.15)).foregroundColor(.green).clipShape(Capsule())
