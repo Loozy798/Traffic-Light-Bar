@@ -6,7 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		1AB09213305A8D6300EA9FFF /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 1AB09212305A8D6300EA9FFF /* README.md */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
+		1AB09212305A8D6300EA9FFF /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		FFF615842FCE83BE007F1ECC /* Traffic Light Bar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Traffic Light Bar.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -33,6 +38,7 @@
 			isa = PBXGroup;
 			children = (
 				FFF615862FCE83BE007F1ECC /* Traffic Light Bar */,
+				1AB09212305A8D6300EA9FFF /* README.md */,
 				FFF615852FCE83BE007F1ECC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -109,6 +115,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1AB09213305A8D6300EA9FFF /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
