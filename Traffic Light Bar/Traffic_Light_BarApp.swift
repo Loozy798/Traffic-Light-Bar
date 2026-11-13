@@ -1,18 +1,23 @@
 import SwiftUI
-import AppKit
 
 @main
 struct Traffic_Light_BarApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-
-    // ⚠️ 不要在 init() 里访问 NSApp！
-    // SwiftUI App.init() 阶段 NSApp (NSApplication!) 尚未被系统初始化，
-    // 强制访问会导致 "Unexpectedly found nil while implicitly unwrapping" 崩溃。
-    // 激活策略统一在 AppDelegate.applicationWillFinishLaunching 里设置。
-
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     var body: some Scene {
         Settings {
-            EmptyView()
+            PreferencesView(preferences: appDelegate.preferences, loginItem: appDelegate.loginItem)
+        }
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("偏好设置…") { appDelegate.showSettings() }
+                    .keyboardShortcut(",", modifiers: .command)
+            }
+            CommandGroup(after: .appInfo) {
+                Button("显示状态面板") { appDelegate.showStatusPanel() }
+                    .keyboardShortcut("p", modifiers: [.command, .shift])
+                Button("打开仪表盘") { appDelegate.showDashboard() }
+                    .keyboardShortcut("d", modifiers: .command)
+            }
         }
     }
 }
